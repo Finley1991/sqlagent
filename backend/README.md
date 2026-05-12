@@ -2,7 +2,7 @@
 
 基于 FastAPI + LangChain + 阿里云百炼 Qwen3 的自然语言数据查询服务。
 
-> **当前阶段**: Phase 1 — 后端基础架构（无 WebSocket / 无图表 / 无会话管理，这些在 Phase 2+ 实现）
+> **当前阶段**: Phase 2 — 后端核心功能（WebSocket + 图表服务 + 会话管理）
 
 ## 快速开始
 
@@ -68,6 +68,36 @@ uvicorn app.main:app --reload --port 8000
 
 ### `GET /api/health` — 健康检查
 
+### `POST /api/sessions` — 创建会话
+
+请求：
+
+```json
+{ "title": "销售分析会话" }
+```
+
+### `GET /api/sessions` — 获取会话列表
+
+### `GET /api/sessions/{session_id}` — 获取会话详情和消息历史
+
+### `PUT /api/sessions/{session_id}` — 重命名会话
+
+### `DELETE /api/sessions/{session_id}` — 删除会话
+
+### `WS /ws/chat/{session_id}` — 实时对话
+
+客户端发消息：
+
+```json
+{ "type": "query", "content": "按城市统计订单总额" }
+```
+
+服务端返回事件（顺序）：
+- `{"type":"sql","content":"..."}`  
+- `{"type":"text","content":"..."}`  
+- `{"type":"chart","config":{...}}`  
+- `{"type":"complete"}`
+
 ## 示例数据库 Schema
 
 电商销售场景，包含 4 张表：
@@ -107,11 +137,19 @@ backend/
 │   ├── main.py              # FastAPI 入口
 │   ├── config.py            # 配置（读取 .env）
 │   ├── api/query.py         # /api/query 路由
+│   ├── api/sessions.py      # /api/sessions 路由
+│   ├── api/chat_ws.py       # /ws/chat/{session_id}
 │   ├── core/
 │   │   ├── llm.py           # Qwen3 LLM 封装
 │   │   ├── agent.py         # SQL Agent（NL → SQL → 解释）
 │   │   └── sql_safety.py    # 只读 SQL 校验
-│   └── schemas/query.py     # 请求/响应 Pydantic 模型
+│   ├── services/
+│   │   ├── chat_service.py
+│   │   ├── session_service.py
+│   │   └── chart_service.py
+│   └── schemas/
+│       ├── query.py
+│       └── session.py
 ├── data/sample.db           # 示例数据库（运行 init 脚本生成）
 ├── scripts/init_sample_db.py
 ├── tests/test_sql_safety.py
