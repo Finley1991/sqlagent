@@ -75,10 +75,17 @@ class SQLAgent:
     def _schema(self) -> str:
         return self.db.get_table_info()
 
-    def generate_sql(self, question: str) -> str:
+    def generate_sql(self, question: str, context: str = "") -> str:
+        user_input = question
+        if context.strip():
+            user_input = (
+                "以下是同一会话的最近上下文，请结合上下文理解代词/省略：\n"
+                f"{context}\n\n"
+                f"当前用户问题：{question}"
+            )
         messages = [
             SystemMessage(content=_SQL_GEN_SYSTEM_PROMPT.format(schema=self._schema())),
-            HumanMessage(content=question),
+            HumanMessage(content=user_input),
         ]
         response = self.llm.invoke(messages)
         return _strip_sql(str(response.content))
@@ -113,8 +120,8 @@ class SQLAgent:
         response = self.llm.invoke(messages)
         return str(response.content).strip()
 
-    def query(self, question: str) -> QueryResult:
-        sql = self.generate_sql(question)
+    def query(self, question: str, context: str = "") -> QueryResult:
+        sql = self.generate_sql(question, context=context)
         try:
             columns, rows = self.run_sql(sql)
         except UnsafeSQLError:
