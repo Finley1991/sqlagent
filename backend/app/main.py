@@ -12,13 +12,18 @@ from app.services.chat_service import get_chat_service
 
 app = FastAPI(
     title="SQL Agent 智能数据分析系统",
-    description="自然语言查询数据库，Phase 1 - 基础架构",
-    version="0.1.0",
+    description="自然语言查询数据库；REST、会话与 WebSocket 实时对话（全栈 Phase 5）。",
+    version="0.5.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

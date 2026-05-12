@@ -2,7 +2,7 @@
 
 基于 FastAPI + LangChain + 阿里云百炼 Qwen3 的自然语言数据查询服务。
 
-> **当前阶段**: Phase 2 — 后端核心功能（WebSocket + 图表服务 + 会话管理）
+> **当前阶段**: Phase 5 — 与前端联调、文档与冒烟脚本；全栈说明见仓库根目录 [README.md](../README.md)，API 摘要见 [docs/API.md](../docs/API.md)。
 
 ## 快速开始
 
@@ -121,7 +121,14 @@ python tests/test_sql_safety.py
 
 ### 端到端冒烟测试
 
-启动服务后：
+**HTTP（不调用大模型）**：仓库根目录执行（端口与后端一致）：
+
+```bash
+export SQLAGENT_BASE_URL=http://127.0.0.1:8000
+python3 scripts/e2e_http_smoke.py
+```
+
+**带 LLM 的查询**：启动服务后：
 
 ```bash
 curl -X POST http://localhost:8000/api/query \
