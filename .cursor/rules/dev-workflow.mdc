@@ -1,0 +1,97 @@
+---
+description: 用日常口语驱动 Linear 任务管理与 Git 分支工作流
+alwaysApply: true
+---
+
+# 开发流程自动化
+
+## 项目配置（修改这里以适配项目）
+
+```yaml
+project:
+  name: "SQL Agent 智能数据分析系统"
+  team: "FIN"                                # Linear team key（issue 前缀，如 FIN-1）
+  repo: "https://github.com/Finley1991/sqlagent"   # GitHub 仓库地址
+```
+ 
+读取规则时，所有触发动作都以上述配置为准。team 字段同时用作 Linear 的 `team` 参数和分支命名前缀。
+
+---
+
+## 口语触发表
+
+下面是用户的日常口语 → 你应当自动执行的动作。当且仅当用户的输入匹配触发模式时才执行；不要主动猜测。
+
+### 1. 开始任务 — "开始做 X" / "开始 X" / "我要做 X" / "做一下 X"
+
+执行步骤：
+
+1. 调用 `list_issues`（Linear MCP），按 `query=X` 在 `team={team}` 下搜索匹配的 issue
+2. 命中处理：
+   - **唯一命中** → 调用 `save_issue` 把 `state` 改为 `In Progress`
+   - **多个命中** → 用 `AskQuestion` 让用户选择具体 issue
+   - **零命中** → 询问用户："Linear 中没找到匹配的任务，是否创建新 issue？"
+3. 输出推荐分支名，格式：`feature/{team-lowercase}-{issue-number}-{kebab-title}`
+   例：`feature/fin-5-login-system`
+4. 给出可复制的命令：
+   ```bash
+   git checkout -b feature/fin-5-login-system
+   ```
+
+### 2. 完成任务 — "X 做完了" / "完成 X" / "X 完成了"
+
+执行步骤：
+
+1. 查找当前对应的 Linear issue（优先按当前分支名解析 issue 编号，其次按 X 搜索）
+2. 调用 `save_issue` 把 `state` 改为 `Done`
+3. 提示用户是否需要：
+   - 创建 PR（输出 `gh pr create` 命令模板）
+   - 推送分支（输出 `git push -u origin HEAD` 命令）
+
+### 3. 同步计划 — 用户粘贴 Markdown 计划
+
+触发模式：用户提供包含 `# Phase N` / `## Phase N` / `# 阶段 N` 标题的 Markdown 文本。
+
+执行步骤：
+
+1. 解析每一个 Phase 标题作为一个 Linear issue 的 **title**
+2. Phase 下的正文作为 issue 的 **description**（保留原 Markdown 格式，包括 `- [ ]` 复选框）
+3. 优先级映射：
+   - Phase 1 / 2 → priority=2（High）
+   - Phase 3+ → priority=3（Medium）
+4. 调用 `save_issue` 批量创建，必填字段：
+   - `team`: 配置中的 `team`
+   - `project`: 当前项目名（如未指定则询问用户）
+   - `title`: Phase 标题
+   - `description`: Phase 正文
+   - `priority`: 按上面规则
+5. 创建完成后输出汇总表：
+
+   | Phase | Issue ID | URL |
+   |-------|----------|-----|
+   | Phase 1 | FIN-N | ... |
+
+### 4. 查看任务 — "看下我的任务" / "我有什么任务" / "todo"
+
+执行步骤：
+
+1. 调用 `list_issues`，按 `assignee="me"` 过滤
+2. 按状态分组输出（In Progress / Todo / Backlog）
+
+---
+
+## 行为规范
+
+- **只在明确触发时动作**：模糊或不在上面 4 个触发模式中的输入，正常对话回复，不要擅自调用 Linear API
+- **每个 Linear 操作前先 echo 你将要做什么**：避免静默改 issue 状态
+- **批量操作要确认**：超过 3 个 issue 的写操作（如同步计划），先列出预览再执行
+- **分支名命名规则严格遵守**：`feature/{team-lc}-{number}-{kebab-title}`，不要自创格式
+- **MCP 工具优先级**：所有 Linear 操作必须通过 `plugin-linear-linear` MCP 调用，不要让用户手动操作
+
+---
+
+## 反例（不要这样做）
+
+- ❌ 用户说"我准备开始写登录" → 不要主动改 Linear，"准备"不是触发词
+- ❌ 用户问"登录怎么做" → 这是技术问题，不要触发任务流
+- ❌ 不要在没有命中 Linear issue 时静默创建新 issue
