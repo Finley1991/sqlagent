@@ -1,6 +1,17 @@
 import { ChartConfig, ChatMessage, SessionItem } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8010';
+function resolveApiBase(): string {
+  const raw = import.meta.env.VITE_API_BASE as string | undefined;
+  if (raw !== undefined && raw !== '') {
+    return raw.replace(/\/$/, '');
+  }
+  if (import.meta.env.DEV) {
+    return '';
+  }
+  return 'http://127.0.0.1:8000';
+}
+
+const API_BASE = resolveApiBase();
 
 interface SessionResponse {
   session_id: string;
@@ -88,5 +99,9 @@ export async function fetchSessionDetail(
 }
 
 export function wsUrl(sessionId: string): string {
+  if (API_BASE === '') {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/ws/chat/${sessionId}`;
+  }
   return `${API_BASE.replace('http://', 'ws://').replace('https://', 'wss://')}/ws/chat/${sessionId}`;
 }
