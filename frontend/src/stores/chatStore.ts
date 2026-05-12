@@ -1,16 +1,22 @@
 import { create } from 'zustand';
-import { ChatMessage, PanelSizes, SessionItem } from '../types';
+import { ChartConfig, ChatMessage, PanelSizes, SessionItem } from '../types';
 
 interface ChatState {
   sessions: SessionItem[];
   currentSessionId: string | null;
   messagesBySession: Record<string, ChatMessage[]>;
+  chartBySession: Record<string, ChartConfig | null>;
+  isLoadingBySession: Record<string, boolean>;
   panelSizes: PanelSizes;
   setCurrentSession: (sessionId: string) => void;
-  addSession: (title: string) => void;
+  setSessions: (sessions: SessionItem[]) => void;
+  addSession: (session: SessionItem) => void;
   updateSessionTitle: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
-  addMessage: (sessionId: string, role: ChatMessage['role'], content: string) => void;
+  setMessages: (sessionId: string, messages: ChatMessage[]) => void;
+  addMessage: (sessionId: string, role: ChatMessage['role'], content: string, sqlQuery?: string) => void;
+  setChartConfig: (sessionId: string, config: ChartConfig | null) => void;
+  setLoading: (sessionId: string, loading: boolean) => void;
   setPanelSizes: (sizes: Partial<PanelSizes>) => void;
 }
 
@@ -24,19 +30,29 @@ export const useChatStore = create<ChatState>((set) => ({
   messagesBySession: {
     [seedSessionId]: [{ id: 'msg-welcome', role: 'assistant', content: '你好，我是 SQL Agent。', createdAt: nowISO() }]
   },
+  chartBySession: { [seedSessionId]: null },
+  isLoadingBySession: { [seedSessionId]: false },
   panelSizes: { left: 22, center: 48, right: 30 },
 
   setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
 
-  addSession: (title) =>
+  setSessions: (sessions) =>
     set((state) => {
-      const id = `session-${Date.now()}`;
+      const keepCurrent = sessions.find((item) => item.id === state.currentSessionId)?.id ?? sessions[0]?.id ?? null;
       return {
-        sessions: [{ id, title: title.trim() || '新会话', createdAt: nowISO() }, ...state.sessions],
-        currentSessionId: id,
-        messagesBySession: { ...state.messagesBySession, [id]: [] }
+        sessions,
+        currentSessionId: keepCurrent
       };
     }),
+
+  addSession: (session) =>
+    set((state) => ({
+      sessions: [session, ...state.sessions],
+      currentSessionId: session.id,
+      messagesBySession: { ...state.messagesBySession, [session.id]: [] },
+      chartBySession: { ...state.chartBySession, [session.id]: null },
+      isLoadingBySession: { ...state.isLoadingBySession, [session.id]: false }
+    })),
 
   updateSessionTitle: (sessionId, title) =>
     set((state) => ({
@@ -48,22 +64,37 @@ export const useChatStore = create<ChatState>((set) => ({
       const sessions = state.sessions.filter((session) => session.id !== sessionId);
       const nextCurrent = state.currentSessionId === sessionId ? sessions[0]?.id ?? null : state.currentSessionId;
       const messagesBySession = { ...state.messagesBySession };
+      const chartBySession = { ...state.chartBySession };
+      const isLoadingBySession = { ...state.isLoadingBySession };
       delete messagesBySession[sessionId];
+      delete chartBySession[sessionId];
+      delete isLoadingBySession[sessionId];
       return {
         sessions,
         currentSessionId: nextCurrent,
-        messagesBySession
+        messagesBySession,
+        chartBySession,
+        isLoadingBySession
       };
     }),
 
-  addMessage: (sessionId, role, content) =>
+  setMessages: (sessionId, messages) =>
+    set((state) => ({
+      messagesBySession: {
+        ...state.messagesBySession,
+        [sessionId]: messages
+      }
+    })),
+
+  addMessage: (sessionId, role, content, sqlQuery) =>
     set((state) => {
       const list = state.messagesBySession[sessionId] ?? [];
       const nextMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
         role,
         content,
-        createdAt: nowISO()
+        createdAt: nowISO(),
+        sqlQuery
       };
       return {
         messagesBySession: {
@@ -72,6 +103,22 @@ export const useChatStore = create<ChatState>((set) => ({
         }
       };
     }),
+
+  setChartConfig: (sessionId, config) =>
+    set((state) => ({
+      chartBySession: {
+        ...state.chartBySession,
+        [sessionId]: config
+      }
+    })),
+
+  setLoading: (sessionId, loading) =>
+    set((state) => ({
+      isLoadingBySession: {
+        ...state.isLoadingBySession,
+        [sessionId]: loading
+      }
+    })),
 
   setPanelSizes: (sizes) =>
     set((state) => {
@@ -93,11 +140,23 @@ export const useCurrentSession = () => {
 export const useStoreActions = () =>
   useChatStore((state) => ({
     setCurrentSession: state.setCurrentSession,
+    setSessions: state.setSessions,
     addSession: state.addSession,
     updateSessionTitle: state.updateSessionTitle,
     deleteSession: state.deleteSession,
+    setMessages: state.setMessages,
     addMessage: state.addMessage,
+    setChartConfig: state.setChartConfig,
+    setLoading: state.setLoading,
     setPanelSizes: state.setPanelSizes
   }));
 
 export const usePanelSizes = () => useChatStore((state) => state.panelSizes);
+export const useCurrentChart = () => {
+  const currentSessionId = useChatStore((state) => state.currentSessionId);
+  return useChatStore((state) => (currentSessionId ? state.chartBySession[currentSessionId] ?? null : null));
+};
+export const useCurrentLoading = () => {
+  const currentSessionId = useChatStore((state) => state.currentSessionId);
+  return useChatStore((state) => (currentSessionId ? state.isLoadingBySession[currentSessionId] ?? false : false));
+};

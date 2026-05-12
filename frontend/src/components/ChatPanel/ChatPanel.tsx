@@ -1,20 +1,43 @@
 import { FormEvent, useState } from 'react';
-import { useCurrentMessages, useCurrentSession, useStoreActions } from '../../stores/chatStore';
+import { useWebSocket } from '../../hooks/useWebSocket';
+import { useCurrentLoading, useCurrentMessages, useCurrentSession, useStoreActions } from '../../stores/chatStore';
 import { Button } from '../UI/Button';
 
 export function ChatPanel() {
   const [input, setInput] = useState('');
   const session = useCurrentSession();
   const messages = useCurrentMessages();
-  const { addMessage } = useStoreActions();
+  const isLoading = useCurrentLoading();
+  const { addMessage, setChartConfig, setLoading } = useStoreActions();
+  const { sendQuery } = useWebSocket(session?.id ?? null);
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!session || !input.trim()) {
       return;
     }
-    addMessage(session.id, 'user', input.trim());
-    addMessage(session.id, 'assistant', '（Phase 3 骨架）后续将在 Phase 4 接入 WebSocket 实时回答。');
+    const question = input.trim();
+    addMessage(session.id, 'user', question);
+    setLoading(session.id, true);
+    let sqlText = '';
+    sendQuery(question, (eventPayload) => {
+      if (eventPayload.type === 'sql') {
+        sqlText = eventPayload.content;
+      }
+      if (eventPayload.type === 'text') {
+        addMessage(session.id, 'assistant', eventPayload.content, sqlText || undefined);
+      }
+      if (eventPayload.type === 'chart') {
+        setChartConfig(session.id, eventPayload.config);
+      }
+      if (eventPayload.type === 'error') {
+        addMessage(session.id, 'assistant', `请求失败：${eventPayload.message}`);
+        setLoading(session.id, false);
+      }
+      if (eventPayload.type === 'complete') {
+        setLoading(session.id, false);
+      }
+    });
     setInput('');
   };
 
@@ -28,8 +51,12 @@ export function ChatPanel() {
         {messages.map((msg) => (
           <div key={msg.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${msg.role === 'user' ? 'ml-auto bg-blue-700' : 'bg-slate-800'}`}>
             {msg.content}
+            {msg.sqlQuery ? (
+              <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-2 text-xs text-emerald-300">{msg.sqlQuery}</pre>
+            ) : null}
           </div>
         ))}
+        {isLoading ? <div className="text-xs text-slate-400">正在生成回答...</div> : null}
       </div>
       <form className="flex gap-2 border-t border-borderSoft p-4" onSubmit={onSubmit}>
         <input
